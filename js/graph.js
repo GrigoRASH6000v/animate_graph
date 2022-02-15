@@ -1,13 +1,18 @@
+import cloneDeep from './cloneDeep.js';
 class Graph {
-  constructor(selector, clickHandler, width, height, padding = 31) {
+  constructor(selector, width, height, totalDotes = 8, padding = 30) {
     this.canvas = document.querySelector(selector);
-    this.clickHandler = clickHandler;
+    this.totalDotes = totalDotes;
     this.coordinates = null;
+    this.newCoordinates = null;
     this.width = width;
     this.height = height;
     this.ctx = this.canvas.getContext(`2d`);
     this.padding = padding;
-    this.animate = window.requestAnimationFrame;
+    this.toggle = false;
+  }
+  cloneDeep(array) {
+    return array.map(el => cloneDeep(el));
   }
   setLines(coordinates) {
     coordinates.forEach((c, i, array) => {
@@ -21,29 +26,48 @@ class Graph {
       }
     });
   }
+  getRandomInt(min, max) {
+    let res = Math.floor(Math.random() * max);
+    if (res < min) {
+      return this.getRandomInt(min, max);
+    }
+    return res;
+  }
+  createDotes() {
+    let array = new Array(this.totalDotes).fill();
+    const interval = Math.round(
+      (this.width - this.padding * 4) / (this.totalDotes - 1)
+    );
+    return array.map((d, i) => {
+      return {
+        x: interval * i + this.padding * 2,
+        y: this.getRandomInt(this.padding * 2, this.height - this.padding),
+      };
+    });
+  }
   setDotes(coordinates) {
-    coordinates.forEach((c) => {
+    coordinates.forEach(c => {
       this.ctx.beginPath();
       this.ctx.arc(c.x, c.y, 6, 0, Math.PI * 2, true);
-      this.ctx.fillStyle = "white";
+      this.ctx.fillStyle = 'white';
       this.ctx.fill();
       this.ctx.stroke();
     });
   }
   setAxes() {
     const axisX = [
-      { x: 25, y: 25 },
-      { x: this.width - this.padding, y: 25 },
+      { x: this.padding, y: this.padding },
+      { x: this.width - this.padding, y: this.padding },
     ];
     const axisY = [
-      { x: 0, y: 0 },
-      { x: 0, y: this.height - this.padding * 2 },
+      { x: this.padding, y: this.padding },
+      { x: this.padding, y: this.height - this.padding },
     ];
     this.setLines(axisX);
     this.setLines(axisY);
   }
   transformAxes() {
-    this.ctx.translate(7, this.height - 7);
+    this.ctx.translate(0, this.height - 0);
     this.ctx.scale(1, -1);
   }
   setCanvasSize() {
@@ -51,65 +75,82 @@ class Graph {
     this.canvas.height = this.height;
   }
   clearField() {
-    this.ctx.clearRect(0, 0, this.width, this.height);
+    this.ctx.clearRect(
+      this.padding + 1,
+      this.padding + 1,
+      this.width - this.padding,
+      this.height - this.padding
+    );
+  }
+  clickHandler() {
+    if (!this.toggle) {
+      this.totalDotes = (this.totalDotes - 2) / 2 + 2;
+      this.mixingDotes(this.cloneDeep(this.coordinates), this.createDotes());
+      this.toggle = !this.toggle;
+    } else {
+      this.totalDotes = (this.totalDotes - 2) * 2 + 2;
+      this.mixingDotes(this.cloneDeep(this.newCoordinates), this.coordinates);
+      this.toggle = !this.toggle;
+    }
+  }
+  render() {
+    this.clearField();
+    this.setLines(this.coordinates);
+    this.setDotes(this.coordinates);
   }
   init() {
     this.setCanvasSize();
     this.transformAxes();
     this.setAxes();
-    this.canvas.addEventListener("click", this.clickHandler);
+    this.coordinates = this.createDotes();
+    this.render();
+    this.canvas.addEventListener('click', () => this.clickHandler());
   }
   offsetDotes(target, point1) {
-    let ax, bx, ay, by;
+    let status = true;
     if (point1.x < target.x) {
-      ax = point1.x;
-      bx = target.x;
-    } else {
-      ax = target.x;
-      bx = point1.x;
+      point1.x += 1;
+    } else if (point1.x > target.x) {
+      point1.x -= 1;
     }
     if (point1.y < target.y) {
-      ay = point1.y;
-      by = target.y;
-    } else {
-      ay = target.y;
-      by = point1.y;
+      point1.y += 1;
+    } else if (point1.y > target.y) {
+      point1.y -= 1;
     }
-    let newCX = 0;
-    let newCY = 0;
-    for (let i = ax; i <= bx; i++) {
-      newCX = i;
-    }
-    for (let j = ay; j <= by; j++) {
-      newCY = j;
-    }
-    return { x: newCX, y: newCY };
+    if (point1.x === target.x && point1.y === target.y) status = false;
+    return status;
   }
   mixingDotes(oldValue, newValue) {
-    const startElementOld = oldValue[0];
-    const startElementNew = newValue[0];
-    const endElementOld = oldValue[oldValue.length - 1];
-    const endElementNew = newValue[newValue.length - 1];
-    console.log(startElementOld);
-    let result = this.offsetDotes(startElementOld, startElementNew);
-    startElementOld.x = result.x;
-    startElementOld.y = result.y;
-
-    console.log(startElementOld);
-    this.setDotes(oldValue);
-    this.animate(this.mixingDotes);
-    // console.log(startElementOld, startElementNew);
-    // console.log(endElementOld, endElementNew);
-  }
-  render(coordinates) {
-    if (!this.coordinates) {
-      this.coordinates = coordinates;
-      this.setLines(this.coordinates);
-      this.setDotes(this.coordinates);
-    } else {
-      //this.animate(this.mixingDotes);
-      this.mixingDotes(this.coordinates, coordinates);
+    let results = [];
+    this.clearField();
+    for (let i = 0; i < newValue.length; i++) {
+      let result;
+      if (newValue.length !== oldValue.length) {
+        let indexPoint1 = i * 2;
+        let indexPoint2 = indexPoint1 - 1;
+        let point1 = oldValue[indexPoint1];
+        let point2 = oldValue[indexPoint2];
+        if (indexPoint1 < oldValue.length) {
+          result = this.offsetDotes(newValue[i], point1);
+          results.push(result);
+        }
+        if (indexPoint2 > 0) {
+          result = this.offsetDotes(newValue[i], point2);
+          results.push(result);
+        }
+      } else {
+        result = this.offsetDotes(newValue[i], oldValue[i]);
+        results.push(result);
+      }
     }
+    this.setLines(oldValue);
+    this.setDotes(oldValue);
+    let resultCheck = results.every(r => !r);
+    if (!resultCheck) {
+      return setTimeout(() => this.mixingDotes(oldValue, newValue));
+    }
+    this.newCoordinates = oldValue;
   }
 }
 

@@ -67,7 +67,7 @@ const coordinates1 = [
 
 const coordinates2 = [
   {
-    x: 200,
+    x: 76,
     y: 158,
   },
   {
